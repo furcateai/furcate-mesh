@@ -50,7 +50,7 @@ authors       = ["Furcate Contributors"]
 homepage      = "https://github.com/furcateai/furcate-mesh"
 repository    = "https://github.com/furcateai/furcate-mesh"
 readme        = "README.md"
-description   = "Tier 1 OSS trait kernel + reference impls for the edge mesh — mDNS discovery, Ed25519 raw-PK TLS, Zenoh pub/sub, BLAKE3 chunked transfer, work-stealing routing."
+description   = "A LAN peer fabric for edge nodes — mDNS discovery, Ed25519 raw-PK TLS, Zenoh pub/sub, BLAKE3 chunked transfer, work-stealing routing."
 keywords      = ["mesh", "p2p", "zenoh", "edge", "discovery"]
 categories    = ["network-programming", "command-line-utilities", "embedded"]
 

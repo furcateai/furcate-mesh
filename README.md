@@ -1,10 +1,15 @@
 # furcate-mesh
 
-**A LAN peer fabric for Pi-class hardware.**
+**A LAN peer fabric for edge nodes — Pi-class first, designed to grow into other edge hardware classes.**
 
-A LAN peer fabric for 2–32 Pi-class boxes. Discover peers over mDNS, share
-models over a content-addressed transfer, and route inference work to peers
-that already have the model loaded.
+A LAN peer fabric for 2–32 edge boxes. Discover peers over mDNS, share models
+over a content-addressed transfer, and route inference work to peers that
+already have the model loaded.
+
+The protocol and trait surface are hardware-agnostic. Pi-class (aarch64 Linux,
+1 GB RAM, intermittent network) is the primary target today because that's
+where the binary-size budget (~20 MB AArch64 musl static) and operational
+defaults are tuned — see [Hardware scope](#hardware-scope) below.
 
 ```
 furcate-mesh peer up                       # join the LAN mesh
@@ -23,19 +28,17 @@ operation is the default.
 
 ```
 github.com/furcateai/
-├── furcate-protocol                   (wire-format specs + schemas)
-├── furcate-platform                   proprietary (consumer of the OSS bundle)
-├── furcate-inference                  (Tier 1 — edge inference kernel)
-├── furcate-mesh       ← you are here  (Tier 1 — edge mesh kernel)
-├── minima-attest                      (Tier 2 — Minima participation)
-├── tenzro-edge                        (Tier 2 — Tenzro participation)
-├── prvnz-edge                         (Tier 2 — PRVNZ DPP participation)
-├── furcate-pi-hat                     (Tier 2 — Pi 5 HAT hardware support)
-└── furcate-pi-minima                  (Tier 2 — Pi-class Minima operator)
+├── furcate-protocol                   wire-format specs + schemas
+├── furcate-inference                  edge inference kernel
+├── furcate-mesh       ← you are here  LAN peer fabric for edge nodes
+├── minima-attest                      Rust client for anchoring hashes on a local Minima node
+├── tenzro-edge                        runtime for participating in the Tenzro Network
+├── prvnz-edge                         runtime for issuing PRVNZ Digital Product Passports
+├── furcate-pi-hat                     Pi 5 HAT hardware support (GPIO, 1-Wire, OPC UA triggers)
+└── furcate-pi-minima                  supervisor for running a Minima full node on a Pi
 ```
 
-**Tier 1** = the trait contract. Stable. Slow careful releases. Never depends on Tier 2.
-**Tier 2** = reference participation runtimes for external networks. Implement Tier 1 traits.
+The kernels (`furcate-inference` + `furcate-mesh`) define the stable trait surface. The participation repos (`minima-attest`, `tenzro-edge`, `prvnz-edge`) provide reference impls of those traits for specific networks. Use the kernel alone or wire in any combination.
 
 ## Protocol
 
@@ -51,10 +54,23 @@ The mesh wire formats (`MeshEvent` variants: `Heartbeat`, `ModelAnnounce`, `Work
 
 ## What it is *not*
 
-- **WAN.** Mesh is LAN-only by design. WAN reach comes from `tenzro-edge` (Tier 2).
+- **WAN.** Mesh is LAN-only by design. WAN reach comes from `tenzro-edge`.
 - **Multi-tenant.** One mesh per LAN.
 - **A scheduler.** Routing is local-first; nothing here makes cluster-wide decisions.
 - **A quorum / consensus protocol.** State is eventually consistent; conflicting writes are last-writer-wins on hybrid logical clocks.
+
+## Hardware scope
+
+The wire formats and the `DiscoveryBackend` / `WorkBroker` trait surface are hardware-agnostic. Status by class:
+
+| Class | Status |
+|---|---|
+| **Raspberry Pi 4 / Pi 5** (aarch64 Linux, 1–8 GB RAM) | **Primary target.** ~20 MB AArch64 musl static budget, curated Tokio features, mDNS + Zenoh + BLAKE3 chunk sizes tuned for this class. Validated on aarch64 Linux. |
+| **NVIDIA Jetson family** (Orin Nano / Nano Super / Orin NX / AGX Orin) | Trait surface and protocol work today on JetPack 6 aarch64. Operational defaults (chunk size, retry windows) not yet tuned for the higher memory + bandwidth budget. |
+| **x86_64 edge boxes** (Intel N100 / NUC-class) | Works today as a build/dev target. Mixed-architecture meshes (some Pis + some x86) are supported by design — `PeerId` and `MeshEvent` are architecture-neutral. |
+| **Microcontroller-class** (Cortex-M, RISC-V MCU, no std) | Out of scope. The MCU mesh story belongs in a separate, lighter-weight kernel. |
+
+"Pi-class first" is a deliberate sequencing decision, not a permanent boundary. Adding a class means tuning the binary-size / chunk-size / retry defaults — the protocol stays the same. Issues with a target board + the constraints you need are welcome.
 
 ## The trait surface
 
@@ -128,7 +144,7 @@ The canonical extension-model design (trait-core + impl-shell + plugin-orbit) li
 
 ## Versioning
 
-- Tier 1 crates release in **lockstep** (same workspace version).
+- The kernel crates in this repo release in **lockstep** (same workspace version). Participation repos that consume the kernel release independently and pin a major version.
 - Wire types (`MeshEvent`, `PeerId`): adding fields with `serde(default)` is minor; renames/removals are major.
 
 MSRV, 1.0 timing, and deprecation windows are roadmap decisions and are not set here.
@@ -136,12 +152,12 @@ MSRV, 1.0 timing, and deprecation windows are roadmap decisions and are not set 
 ## Sibling repos
 
 - [`furcate-protocol`](https://github.com/furcateai/furcate-protocol) — wire-format specs + schemas + test vectors
-- [`furcate-inference`](https://github.com/furcateai/furcate-inference) — Tier 1, edge inference kernel
-- [`minima-attest`](https://github.com/furcateai/minima-attest) — Tier 2, Minima participation
-- [`tenzro-edge`](https://github.com/furcateai/tenzro-edge) — Tier 2, Tenzro participation (provides `DiscoveryBackend` + `WorkBroker` impls)
-- [`prvnz-edge`](https://github.com/furcateai/prvnz-edge) — Tier 2, PRVNZ DPP participation
-- [`furcate-pi-hat`](https://github.com/furcateai/furcate-pi-hat) — Tier 2, Pi 5 HAT hardware support
-- [`furcate-pi-minima`](https://github.com/furcateai/furcate-pi-minima) — Tier 2, Pi-class Minima operator
+- [`furcate-inference`](https://github.com/furcateai/furcate-inference) — edge inference kernel
+- [`minima-attest`](https://github.com/furcateai/minima-attest) — Rust client for anchoring hashes on a local Minima node
+- [`tenzro-edge`](https://github.com/furcateai/tenzro-edge) — runtime for participating in the Tenzro Network (provides `DiscoveryBackend` + `WorkBroker` impls)
+- [`prvnz-edge`](https://github.com/furcateai/prvnz-edge) — runtime for issuing PRVNZ Digital Product Passports
+- [`furcate-pi-hat`](https://github.com/furcateai/furcate-pi-hat) — Pi 5 HAT hardware support
+- [`furcate-pi-minima`](https://github.com/furcateai/furcate-pi-minima) — supervisor for running a Minima full node on a Pi
 
 ## License
 
