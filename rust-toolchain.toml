@@ -1,0 +1,6 @@
+[toolchain]
+# Match MSRV declared in Cargo.toml. Using `stable` rather than a pinned
+# version so contributors on aarch64-apple-darwin (which only has stable
+# channels for older minor versions intermittently) don't bounce.
+channel = "stable"
+components = ["rustfmt", "clippy"]

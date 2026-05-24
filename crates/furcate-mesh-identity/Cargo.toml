@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name          = "furcate-mesh-identity"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+homepage.workspace      = true
+repository.workspace    = true
+readme.workspace        = true
+description   = "Ed25519 peer identity + raw-public-key TLS config for furcate-mesh."
+
+[dependencies]
+furcate-mesh-core = { path = "../furcate-mesh-core" }
+ed25519-dalek = { workspace = true }
+rand          = { workspace = true }
+rustls        = { workspace = true }
+rustls-pki-types = { workspace = true }
+thiserror     = { workspace = true }
+tracing       = { workspace = true }
+
+[dev-dependencies]
+tempfile      = "3"
+tokio         = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
+tokio-rustls  = { version = "0.26", default-features = false, features = ["aws-lc-rs", "tls12"] }
+
+[lints]
+workspace = true

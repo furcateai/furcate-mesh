@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name          = "furcate-mesh-discovery"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+homepage.workspace      = true
+repository.workspace    = true
+readme.workspace        = true
+description   = "mDNS peer discovery for furcate-mesh."
+
+[dependencies]
+furcate-mesh-core = { path = "../furcate-mesh-core" }
+mdns-sd       = { workspace = true }
+tokio         = { workspace = true, features = ["sync", "rt", "time"] }
+thiserror     = { workspace = true }
+tracing       = { workspace = true }
+serde         = { workspace = true }
+
+[dev-dependencies]
+tokio         = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

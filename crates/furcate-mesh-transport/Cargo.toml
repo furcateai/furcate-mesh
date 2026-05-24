@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name          = "furcate-mesh-transport"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+homepage.workspace      = true
+repository.workspace    = true
+readme.workspace        = true
+description   = "Zenoh transport + topic conventions for furcate-mesh."
+
+[dependencies]
+furcate-mesh-core = { path = "../furcate-mesh-core" }
+zenoh         = { workspace = true }
+tokio         = { workspace = true, features = ["sync", "rt", "time", "macros"] }
+tokio-stream  = { workspace = true }
+futures       = { workspace = true }
+async-trait   = { workspace = true }
+serde_json    = { workspace = true }
+thiserror     = { workspace = true }
+tracing       = { workspace = true }
+
+[lints]
+workspace = true

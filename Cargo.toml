@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# `furcate-mesh` is a LAN fabric for 2–32 Pi-class boxes — mDNS discovery,
+# Ed25519 raw-PK TLS, Zenoh pub/sub, BLAKE3 chunked model transfer, and
+# work-stealing inference routing. The workspace mirrors those concerns:
+#
+#   -core       → Peer identity types, mesh-event types, error types.
+#                 Zero deps on Zenoh / rustls / mdns-sd. This is what
+#                 downstream code imports when it wants the mesh's data
+#                 shape without the protocol surface.
+#   -identity   → Ed25519 keypair on-disk + rustls raw-public-key
+#                 server/client config builders.
+#   -discovery  → mDNS advertise + browse. The `_furcate-mesh._tcp.local`
+#                 service type is the only convention.
+#   -transport  → Zenoh session wrapper + topic conventions. The
+#                 transport is intentionally thin — Zenoh already does
+#                 the heavy lifting; this crate is mostly type-safe
+#                 topic names + payload framing.
+#   -transfer   → BLAKE3 content-addressed chunked file pull. Models are
+#                 the canonical payload but the protocol is generic.
+#   -routing    → Work-stealing decision logic. Local-only — no
+#                 scheduler-of-schedulers. Operator-tunable hop budget.
+#   -cli        → `furcate-mesh` binary that wires the above together.
+#
+# Why the split: an operator who only wants peer discovery in their own
+# Rust daemon depends on `-discovery` + `-identity` and pays for nothing
+# else. The CLI is the integration point — it has every dep.
+#
+# Binary size target: <20 MB AArch64 musl static. Keep that in mind
+# before pulling in new heavy crates.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/furcate-mesh-core",
+    "crates/furcate-mesh-identity",
+    "crates/furcate-mesh-discovery",
+    "crates/furcate-mesh-transport",
+    "crates/furcate-mesh-transfer",
+    "crates/furcate-mesh-routing",
+    "crates/furcate-mesh-cli",
+]
+
+[workspace.package]
+version       = "0.1.0"
+edition       = "2024"
+rust-version  = "1.95"
+license       = "Apache-2.0"
+authors       = ["Furcate Contributors"]
+homepage      = "https://github.com/furcateai/furcate-mesh"
+repository    = "https://github.com/furcateai/furcate-mesh"
+readme        = "README.md"
+description   = "Tier 1 OSS trait kernel + reference impls for the edge mesh — mDNS discovery, Ed25519 raw-PK TLS, Zenoh pub/sub, BLAKE3 chunked transfer, work-stealing routing."
+keywords      = ["mesh", "p2p", "zenoh", "edge", "discovery"]
+categories    = ["network-programming", "command-line-utilities", "embedded"]
+
+[workspace.dependencies]
+# --- Cross-cutting -------------------------------------------------------
+serde         = { version = "1", features = ["derive"] }
+serde_json    = "1"
+thiserror     = "1"
+anyhow        = "1"
+tracing       = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+async-trait   = "0.1"
+futures       = "0.3"
+tokio         = { version = "1", default-features = false }
+tokio-stream  = { version = "0.1", default-features = false }
+chrono        = { version = "0.4", default-features = false, features = ["std", "serde", "clock"] }
+bytes         = "1"
+
+# --- Mesh primitives -----------------------------------------------------
+# Verified live (2026-05-22): zenoh = "1.9", mdns-sd = "0.19",
+# rustls = "0.23.40", ed25519-dalek = "2.2". Zenoh on Pi 4 is the
+# load-bearing dep; pinning to a minor avoids surprise breakage between
+# 1.x releases that have been rapid through 2025-2026.
+#
+# rustls 0.23 swapped its default crypto provider from `ring` to
+# `aws-lc-rs` upstream (FIPS-eligible). We follow that move so the
+# bundle stays on the path the rest of the ecosystem is taking.
+zenoh         = { version = "1.9", default-features = false, features = ["unstable", "transport_tcp", "transport_compression"] }
+mdns-sd       = "0.19"
+rustls        = { version = "=0.23.40", default-features = false, features = ["aws-lc-rs", "std", "tls12"] }
+rustls-pki-types = "1"
+ed25519-dalek = { version = "2.2", features = ["std", "rand_core", "pkcs8", "pem"] }
+rand          = "0.8"
+
+# --- Hashing -------------------------------------------------------------
+blake3        = "1"
+hex           = "0.4"
+
+# --- Wire-format codecs --------------------------------------------------
+# Unpadded base64url (RFC 4648 §5) for opaque variable-length byte fields
+# on the wire (MeshEvent WorkOffer.request, WorkResult.response,
+# AgentState.state). Matches the JWS/JWT/COSE/Sigstore convention and the
+# format `furcate-protocol` test vectors pin.
+base64        = "0.22"
+
+# --- Storage -------------------------------------------------------------
+# redb mirrors furcate-inference; mesh uses it for the local model index
+# and the receipt log.
+redb          = "2"
+
+# --- CLI -----------------------------------------------------------------
+clap          = { version = "4", features = ["derive", "env"] }
+
+# --- Sibling OSS ---------------------------------------------------------
+# `furcate-inference-core` gives us the `Engine`/`ArtefactRef` shapes so
+# the routing crate can talk about "models" without redefining them. Path
+# dep during local development; will switch to crates.io once both crates
+# publish.
+furcate-inference-core = { path = "../furcate-inference/crates/furcate-inference-core" }
+
+[workspace.lints.rust]
+unsafe_code  = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery  = { level = "warn", priority = -1 }
+doc_markdown = "allow"
+module_name_repetitions = "allow"
+multiple_crate_versions = "allow"
+# Mesh event enums carry Zenoh sample payloads which are non-trivial in
+# size; keeping them un-boxed for ergonomic match arms.
+large_enum_variant = "allow"

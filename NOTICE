@@ -1,0 +1,13 @@
+furcate-mesh
+Copyright 2026 Furcate Contributors
+
+This product includes software developed at Furcate (https://furcate.xyz).
+
+This product builds a LAN peer fabric using:
+  - Zenoh (https://zenoh.io) — Apache-2.0 / EPL-2.0
+  - rustls (https://github.com/rustls/rustls) — Apache-2.0 / MIT / ISC
+  - mdns-sd (https://github.com/keepsimple1/mdns-sd) — Apache-2.0 / MIT
+  - ed25519-dalek (https://github.com/dalek-cryptography/curve25519-dalek) — BSD-3-Clause
+
+Model artefacts transferred over the mesh carry their own licences;
+operators are responsible for compliance with each model's terms.

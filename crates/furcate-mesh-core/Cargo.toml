@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name          = "furcate-mesh-core"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+homepage.workspace      = true
+repository.workspace    = true
+readme.workspace        = true
+description   = "Core types for furcate-mesh: peer IDs, mesh events, errors. Zero Zenoh/rustls/mdns deps."
+
+[dependencies]
+serde         = { workspace = true }
+thiserror     = { workspace = true }
+chrono        = { workspace = true }
+blake3        = { workspace = true }
+# Wire-format codecs. `wire::hex_array` encodes [u8; 32] as lowercase hex
+# strings (matches PeerId display form and `furcate-protocol` schemas);
+# `wire::base64url_bytes` encodes Vec<u8>/Bytes as unpadded base64url
+# (matches JWS/JWT/COSE). These are the formats the protocol test vectors
+# pin and what every comparable spec emits on the wire.
+hex           = { workspace = true }
+base64        = { workspace = true }
+bytes         = { workspace = true, features = ["serde"] }
+async-trait   = { workspace = true }
+futures       = { workspace = true }
+
+[dev-dependencies]
+serde_json    = { workspace = true }
+
+[lints]
+workspace = true
