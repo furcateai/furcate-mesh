@@ -3,3 +3,8 @@
 Cargo.lock.bak
 .DS_Store
 *.swp
+
+# Claude Code — no Claude state in public repos
+.claude/
+CLAUDE.md
+CLAUDE.local.md
