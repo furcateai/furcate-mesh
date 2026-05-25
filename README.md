@@ -22,24 +22,6 @@ furcate-mesh route inspect                 # show recent routing decisions
 Independent. Runs without Tenzro, without any external network. Air-gapped LAN
 operation is the default.
 
----
-
-## Where it sits
-
-```
-github.com/furcateai/
-├── furcate-protocol                   wire-format specs + schemas
-├── furcate-inference                  edge inference kernel
-├── furcate-mesh       ← you are here  LAN peer fabric for edge nodes
-├── minima-attest                      Rust client for anchoring hashes on a local Minima node
-├── tenzro-edge                        runtime for participating in the Tenzro Network
-├── prvnz-edge                         runtime for issuing PRVNZ Digital Product Passports
-├── furcate-pi-hat                     Pi 5 HAT hardware support (GPIO, 1-Wire, OPC UA triggers)
-└── furcate-pi-minima                  supervisor for running a Minima full node on a Pi
-```
-
-The kernels (`furcate-inference` + `furcate-mesh`) define the stable trait surface. The participation repos (`minima-attest`, `tenzro-edge`, `prvnz-edge`) provide reference impls of those traits for specific networks. Use the kernel alone or wire in any combination.
-
 ## Protocol
 
 The mesh wire formats (`MeshEvent` variants: `Heartbeat`, `ModelAnnounce`, `WorkOffer`, `WorkResult`, `AgentState`; `PeerId`; `HybridLogicalClock`) are specified in [`furcate-protocol`](https://github.com/furcateai/furcate-protocol). This release tracks **`furcate-protocol 0.1.x`**. Other mesh implementations targeting the same protocol tag interoperate with this one — events serialised by either side validate against the JSON Schemas published in that repo.
