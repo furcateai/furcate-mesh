@@ -60,7 +60,7 @@ pub const CHUNK_SIZE: usize = 1024 * 1024;
 pub const TRANSFER_ROOT: &str = "furcate/mesh/transfer";
 
 /// Default per-pull deadline. Configurable per call via [`PullOptions`].
-pub const DEFAULT_PULL_TIMEOUT: Duration = Duration::from_secs(300);
+pub const DEFAULT_PULL_TIMEOUT: Duration = Duration::from_mins(5);
 
 /// Transfer errors.
 #[derive(Debug, Error)]
