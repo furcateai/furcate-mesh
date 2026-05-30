@@ -95,6 +95,11 @@ hex           = "0.4"
 # AgentState.state). Matches the JWS/JWT/COSE/Sigstore convention and the
 # format `furcate-protocol` test vectors pin.
 base64        = "0.22"
+# CBOR (RFC 8949) codec for the compact on-wire MeshEvent encoding spoken by
+# MCU-class nodes (furcate-node firmware uses TinyCBOR on the C side). Pulled
+# only under furcate-mesh-core's `cbor` feature so the JSON-only consumers stay
+# lean.
+ciborium      = "0.2"
 
 # --- Storage -------------------------------------------------------------
 # redb mirrors furcate-inference; mesh uses it for the local model index

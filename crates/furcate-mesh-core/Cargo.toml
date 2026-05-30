@@ -11,11 +11,19 @@ repository.workspace    = true
 readme.workspace        = true
 description   = "Core types for furcate-mesh: peer IDs, mesh events, errors. Zero Zenoh/rustls/mdns deps."
 
+[features]
+default = []
+# `cbor` adds the compact RFC 8949 codec (`wire::cbor`) used to exchange
+# MeshEvent frames with MCU-class `furcate-node` firmware. Off by default so
+# JSON-only consumers don't pull ciborium.
+cbor = ["dep:ciborium"]
+
 [dependencies]
 serde         = { workspace = true }
 thiserror     = { workspace = true }
 chrono        = { workspace = true }
 blake3        = { workspace = true }
+ciborium      = { workspace = true, optional = true }
 # Wire-format codecs. `wire::hex_array` encodes [u8; 32] as lowercase hex
 # strings (matches PeerId display form and `furcate-protocol` schemas);
 # `wire::base64url_bytes` encodes Vec<u8>/Bytes as unpadded base64url

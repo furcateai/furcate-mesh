@@ -48,7 +48,11 @@ pub mod hex_array {
     /// rejected so two implementations that round-trip a `PeerId` cannot
     /// produce different bytes for the same JSON.
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
-        let s = <&str>::deserialize(d)?;
+        // `Cow<str>` (not `&str`) so the codec works with non-borrowing
+        // formats too — ciborium (CBOR) cannot hand out borrowed strings the
+        // way serde_json can.
+        let s = <std::borrow::Cow<'de, str>>::deserialize(d)?;
+        let s = s.as_ref();
         if s.len() != 64 {
             return Err(de::Error::invalid_length(
                 s.len(),
@@ -99,12 +103,94 @@ pub mod base64url_bytes_bytes {
     /// string isn't valid base64url under either the padded or unpadded
     /// alphabet.
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Bytes, D::Error> {
-        let s = <&str>::deserialize(d)?;
+        // `Cow<str>` so CBOR (ciborium, non-borrowing) works alongside JSON.
+        let s = <std::borrow::Cow<'de, str>>::deserialize(d)?;
+        let s = s.as_ref();
         let v = URL_SAFE_NO_PAD
             .decode(s)
             .or_else(|_| URL_SAFE.decode(s))
             .map_err(de::Error::custom)?;
         Ok(Bytes::from(v))
+    }
+}
+
+/// `Option<bytes::Bytes>` as an optional unpadded base64url string.
+///
+/// `None` is meant to be skipped on the wire (pair with
+/// `#[serde(default, skip_serializing_if = "Option::is_none")]`); `Some`
+/// encodes exactly like [`base64url_bytes_bytes`].
+pub mod base64url_bytes_opt {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
+    use bytes::Bytes;
+    use serde::de::{Deserialize as _, Deserializer, Error as _};
+    use serde::ser::Serializer;
+
+    /// Serialise `Some(bytes)` as an unpadded base64url string; `None` as null.
+    ///
+    /// # Errors
+    /// Propagates the serializer's error (infallible for `serde_json` /
+    /// `ciborium` string + null).
+    pub fn serialize<S: Serializer>(value: &Option<Bytes>, s: S) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(b) => s.serialize_str(&URL_SAFE_NO_PAD.encode(b)),
+            None => s.serialize_none(),
+        }
+    }
+
+    /// Deserialise an optional base64url string into `Option<Bytes>`.
+    ///
+    /// # Errors
+    /// Returns a `serde` error when a present value is not valid base64url.
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Bytes>, D::Error> {
+        // `Cow<str>` so CBOR (ciborium, non-borrowing) works alongside JSON.
+        let opt = <Option<std::borrow::Cow<'de, str>>>::deserialize(d)?;
+        match opt {
+            None => Ok(None),
+            Some(s) => {
+                let v = URL_SAFE_NO_PAD
+                    .decode(s.as_ref())
+                    .or_else(|_| URL_SAFE.decode(s.as_ref()))
+                    .map_err(D::Error::custom)?;
+                Ok(Some(Bytes::from(v)))
+            }
+        }
+    }
+}
+
+/// Canonical CBOR (RFC 8949) codec for [`crate::MeshEvent`].
+///
+/// This is the compact on-wire form spoken by MCU-class `furcate-node`
+/// firmware (TinyCBOR on the C side). `ciborium` serialises the same serde
+/// model the JSON path uses, so the frame is a CBOR map keyed by `kind` with
+/// the variant fields alongside — `PeerId` as a 64-char hex text string,
+/// opaque byte fields as base64url text strings. The exact shape is pinned by
+/// the CDDL schema + golden vectors in the `furcate-node` repo's `wire/`
+/// directory; keep both implementations in lock-step with those vectors.
+#[cfg(feature = "cbor")]
+pub mod cbor {
+    use crate::MeshEvent;
+
+    /// Encode a [`MeshEvent`] to CBOR bytes.
+    ///
+    /// # Errors
+    /// Returns [`crate::MeshError::Encoding`] if serialisation fails (it does
+    /// not, for the in-memory `Vec` writer, short of OOM).
+    pub fn to_vec(event: &MeshEvent) -> crate::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        ciborium::ser::into_writer(event, &mut buf)
+            .map_err(|e| crate::MeshError::Encoding(format!("cbor encode: {e}")))?;
+        Ok(buf)
+    }
+
+    /// Decode a [`MeshEvent`] from CBOR bytes.
+    ///
+    /// # Errors
+    /// Returns [`crate::MeshError::Encoding`] if the bytes are not a valid
+    /// CBOR-encoded `MeshEvent`.
+    pub fn from_slice(bytes: &[u8]) -> crate::Result<MeshEvent> {
+        ciborium::de::from_reader(bytes)
+            .map_err(|e| crate::MeshError::Encoding(format!("cbor decode: {e}")))
     }
 }
 

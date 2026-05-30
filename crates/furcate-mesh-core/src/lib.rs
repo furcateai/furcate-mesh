@@ -188,6 +188,94 @@ pub enum MeshEvent {
         #[serde(with = "crate::wire::base64url_bytes_bytes")]
         state: bytes::Bytes,
     },
+
+    // -- Sensor / edge-node frames (Sensor-class `furcate-node` firmware) ----
+    //
+    // These carry the two-way link between MCU-class nodes and a Field-class
+    // aggregator. They are wire-stable additions — see the CDDL schema in the
+    // `furcate-node` repo's `wire/` directory, which the C firmware codec is
+    // validated against.
+    /// A sensor sample published by an edge node (uplink).
+    SensorReading {
+        /// Originating node.
+        peer: PeerId,
+        /// When the node sampled.
+        clock: HybridLogicalClock,
+        /// Stable sensor id within the node, e.g. `bme280-0`.
+        sensor_id: String,
+        /// Metric name, e.g. `temperature_c`, `humidity_pct`.
+        metric: String,
+        /// Numeric value. `f64` for the same IEEE-754 round-trip reason as
+        /// [`MeshEvent::Heartbeat`]'s `load`.
+        value: f64,
+        /// Unit label, e.g. `C`, `%`, `Pa`. Empty when dimensionless.
+        unit: String,
+        /// Optional opaque payload for non-scalar sensors (image crop, raw
+        /// frame). Absent for plain scalar readings.
+        #[serde(
+            with = "crate::wire::base64url_bytes_opt",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        raw: Option<bytes::Bytes>,
+    },
+    /// A command addressed to an edge node (downlink). The node interprets
+    /// `verb` + `params`; unknown verbs are ignored (forward-compatible).
+    Command {
+        /// Target node.
+        to: PeerId,
+        /// Issuer's clock.
+        clock: HybridLogicalClock,
+        /// Verb, e.g. `set-interval`, `actuate`, `identify`, `reboot`.
+        verb: String,
+        /// Opaque parameter blob (CBOR/JSON), interpreted per `verb`.
+        #[serde(with = "crate::wire::base64url_bytes_bytes")]
+        params: bytes::Bytes,
+    },
+    /// Device attestation evidence forwarded by the node; the aggregator
+    /// relays it northbound to the verifier (RATS).
+    Attestation {
+        /// Attesting node.
+        peer: PeerId,
+        /// Node's clock.
+        clock: HybridLogicalClock,
+        /// Evidence format, e.g. `esp-secure-boot-v2`, `psa-token`.
+        format: String,
+        /// Opaque evidence blob (COSE/CBOR).
+        #[serde(with = "crate::wire::base64url_bytes_bytes")]
+        evidence: bytes::Bytes,
+    },
+    /// An OTA image offered to a node (downlink). Delivery is either a `url`
+    /// the node fetches, or out-of-band chunking keyed by `image_id`.
+    OtaOffer {
+        /// Target node.
+        to: PeerId,
+        /// Issuer's clock.
+        clock: HybridLogicalClock,
+        /// Image identifier (also the chunk-transfer key).
+        image_id: String,
+        /// Monotonic secure version (anti-rollback).
+        version: u32,
+        /// Fetch URL (mqtt/https). Empty when delivered out-of-band.
+        url: String,
+        /// Lowercase-hex SHA-256 of the image.
+        sha256: String,
+        /// Image size in bytes.
+        size: u64,
+    },
+    /// A node's OTA progress/outcome (uplink) for an [`MeshEvent::OtaOffer`].
+    OtaStatus {
+        /// Reporting node.
+        peer: PeerId,
+        /// Node's clock.
+        clock: HybridLogicalClock,
+        /// Image this status refers to.
+        image_id: String,
+        /// State: `downloading`, `applied`, `valid`, `rolled-back`, `failed`.
+        state: String,
+        /// Free-form detail (error text, percent).
+        detail: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -375,6 +463,83 @@ mod tests {
         let id = PeerId::from_bytes([0xab; 32]);
         let s = serde_json::to_string(&id).expect("encode");
         assert_eq!(s, format!("\"{}\"", "ab".repeat(32)));
+    }
+
+    #[test]
+    fn sensor_reading_roundtrips_via_json_without_raw() {
+        let ev = MeshEvent::SensorReading {
+            peer: PeerId::from_bytes([3; 32]),
+            clock: HybridLogicalClock::now(),
+            sensor_id: "bme280-0".into(),
+            metric: "temperature_c".into(),
+            value: 21.5,
+            unit: "C".into(),
+            raw: None,
+        };
+        let s = serde_json::to_string(&ev).expect("encode");
+        // `raw: None` must be skipped on the wire.
+        assert!(!s.contains("raw"), "raw should be omitted when None: {s}");
+        assert!(s.contains(r#""kind":"sensor-reading""#), "got: {s}");
+        let _back: MeshEvent = serde_json::from_str(&s).expect("decode");
+    }
+
+    #[test]
+    fn command_and_attestation_roundtrip_via_json() {
+        let cmd = MeshEvent::Command {
+            to: PeerId::from_bytes([4; 32]),
+            clock: HybridLogicalClock::now(),
+            verb: "set-interval".into(),
+            params: bytes::Bytes::from_static(b"{\"secs\":30}"),
+        };
+        let s = serde_json::to_string(&cmd).expect("encode");
+        let _back: MeshEvent = serde_json::from_str(&s).expect("decode");
+
+        let att = MeshEvent::Attestation {
+            peer: PeerId::from_bytes([5; 32]),
+            clock: HybridLogicalClock::now(),
+            format: "esp-secure-boot-v2".into(),
+            evidence: bytes::Bytes::from_static(&[0xde, 0xad, 0xbe, 0xef]),
+        };
+        let s = serde_json::to_string(&att).expect("encode");
+        let _back: MeshEvent = serde_json::from_str(&s).expect("decode");
+    }
+
+    #[cfg(feature = "cbor")]
+    #[test]
+    fn mesh_event_roundtrips_via_cbor() {
+        use crate::wire::cbor;
+        let cases = [
+            MeshEvent::Heartbeat {
+                peer: PeerId::from_bytes([1; 32]),
+                clock: HybridLogicalClock { wall_ms: 42, counter: 7 },
+                load: 0.5,
+            },
+            MeshEvent::SensorReading {
+                peer: PeerId::from_bytes([2; 32]),
+                clock: HybridLogicalClock { wall_ms: 99, counter: 0 },
+                sensor_id: "sht41".into(),
+                metric: "humidity_pct".into(),
+                value: 47.25,
+                unit: "%".into(),
+                raw: Some(bytes::Bytes::from_static(&[1, 2, 3])),
+            },
+            MeshEvent::OtaStatus {
+                peer: PeerId::from_bytes([6; 32]),
+                clock: HybridLogicalClock { wall_ms: 1, counter: 1 },
+                image_id: "fw-1.2.3".into(),
+                state: "valid".into(),
+                detail: String::new(),
+            },
+        ];
+        for ev in cases {
+            let bytes = cbor::to_vec(&ev).expect("cbor encode");
+            let back = cbor::from_slice(&bytes).expect("cbor decode");
+            // Re-encode to JSON on both sides to compare structurally without
+            // requiring PartialEq on MeshEvent.
+            let a = serde_json::to_string(&ev).unwrap();
+            let b = serde_json::to_string(&back).unwrap();
+            assert_eq!(a, b, "cbor round-trip changed the event");
+        }
     }
 
     #[test]
